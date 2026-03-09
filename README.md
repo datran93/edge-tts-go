@@ -64,6 +64,20 @@ You can change the rate, volume, and pitch of the generated speech.
 ./bin/edge-tts --pitch="-10Hz" --text "Deep voice." --write-media deep.mp3
 ```
 
+### Direct Playback (Piping)
+If you do not want to save the mp3 file to disk and just want to listen to the synthesized speech immediately, you can use the `-` option with `--write-media` to output binary media to standard output (stdout). You can pipe this directly into a media player like `mpv` or `ffplay`.
+
+```bash
+./bin/edge-tts --text "Hello, playing this live from the terminal!" --write-media - | mpv -
+```
+
+### Parsing Markdown
+If you are passing a large markdown document and want a smooth, uninterrupted reading experience without reading code blocks, headers, or blockquotes, use the `--parse-markdown` flag. It strips markdown artifacts and replaces all line breaks with spaces so the TTS engine speaks fluidly.
+
+```bash
+./bin/edge-tts --parse-markdown -f README.md --write-media docs.mp3
+```
+
 ## Using as a Go Module
 
 You can easily embed `edge-tts-go` into your own Go applications. 

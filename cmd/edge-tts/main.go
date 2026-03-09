@@ -21,6 +21,7 @@ func main() {
 func run() error {
 	var text, file, voice, rate, volume, pitch, writeMedia, writeSubtitles string
 	var listVoices bool
+	var parseMarkdown bool
 
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	flag.StringVar(&text, "t", "", "what TTS will say")
@@ -31,6 +32,7 @@ func run() error {
 	flag.StringVar(&voice, "voice", edge_tts.DefaultVoice, "voice for TTS")
 	flag.BoolVar(&listVoices, "l", false, "lists available voices and exits")
 	flag.BoolVar(&listVoices, "list-voices", false, "lists available voices and exits")
+	flag.BoolVar(&parseMarkdown, "parse-markdown", false, "Parse markdown input to clean plain text for smoother speech")
 	flag.StringVar(&rate, "rate", "+0%", "set TTS rate")
 	flag.StringVar(&volume, "volume", "+0%", "set TTS volume")
 	flag.StringVar(&pitch, "pitch", "+0Hz", "set TTS pitch")
@@ -64,6 +66,10 @@ func run() error {
 		return fmt.Errorf("no text provided")
 	}
 
+	if parseMarkdown {
+		text = edge_tts.ParseMarkdownToText(text)
+	}
+
 	config := edge_tts.TTSConfig{
 		Voice:  voice,
 		Rate:   rate,
@@ -77,16 +83,18 @@ func run() error {
 	}
 
 	var audioOutput io.Writer
-	if writeMedia != "" && writeMedia != "-" {
-		f, err := os.Create(writeMedia)
-		if err != nil {
-			return fmt.Errorf("failed to open media file: %w", err)
+	if writeMedia != "" {
+		if writeMedia == "-" {
+			audioOutput = os.Stdout
+		} else {
+			f, err := os.Create(writeMedia)
+			if err != nil {
+				return fmt.Errorf("failed to open media file: %w", err)
+			}
+			defer f.Close()
+			audioOutput = f
 		}
-		defer f.Close()
-		audioOutput = f
 	} else {
-		// Outputting binary data to stdout may corrupt the terminal test runner.
-		// Use io.Discard if we aren't writing to a file, to make testing easy without corrupting.
 		audioOutput = io.Discard
 	}
 
