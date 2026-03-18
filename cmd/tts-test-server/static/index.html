@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge TTS Streaming Performance Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #16161f;
+            --bg-card-hover: #1c1c28;
+            --border-primary: #2a2a3a;
+            --border-glow: #6366f1;
+            --text-primary: #e8e8ef;
+            --text-secondary: #9898a8;
+            --text-muted: #686878;
+            --accent-indigo: #6366f1;
+            --accent-cyan: #22d3ee;
+            --accent-emerald: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-rose: #f43f5e;
+            --accent-purple: #a855f7;
+            --glass-bg: rgba(22, 22, 31, 0.75);
+            --glass-border: rgba(99, 102, 241, 0.15);
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5);
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(34, 211, 238, 0.05) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(168, 85, 247, 0.04) 0%, transparent 50%);
+            animation: ambientShift 20s ease-in-out infinite alternate;
+            z-index: 0;
+        }
+
+        @keyframes ambientShift {
+            0% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            100% {
+                transform: translate(-3%, 2%) rotate(3deg);
+            }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-radius: 100px;
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--accent-indigo);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            margin-bottom: 16px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            margin-bottom: 24px;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .card-icon.indigo {
+            background: rgba(99, 102, 241, 0.15);
+        }
+
+        .card-icon.cyan {
+            background: rgba(34, 211, 238, 0.15);
+        }
+
+        .card-icon.emerald {
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        .card-icon.orange {
+            background: rgba(245, 158, 11, 0.15);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .card-subtitle {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* Input Controls */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        textarea,
+        select,
+        input[type="text"] {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+            padding: 12px 16px;
+            transition: all 0.2s ease;
+            outline: none;
+            width: 100%;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+        }
+
+        textarea:focus,
+        select:focus,
+        input[type="text"]:focus {
+            border-color: var(--accent-indigo);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            font-weight: 600;
+            border-radius: var(--radius-md);
+            border: none;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+            opacity: 0;
+            transition: opacity 0.25s;
+        }
+
+        .btn:hover::after {
+            opacity: 1;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn:disabled::after {
+            display: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-indigo), #818cf8);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            box-shadow: 0 6px 28px rgba(99, 102, 241, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--accent-cyan), #06b6d4);
+            color: #0a0a0f;
+            box-shadow: 0 4px 20px rgba(34, 211, 238, 0.25);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            box-shadow: 0 6px 28px rgba(34, 211, 238, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, var(--accent-rose), #e11d48);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(244, 63, 94, 0.3);
+        }
+
+        /* Method Tabs */
+        .method-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .method-tab {
+            padding: 8px 20px;
+            border: 1px solid var(--border-primary);
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 500;
+            border-radius: 100px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .method-tab.active {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent-indigo);
+            color: var(--accent-indigo);
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+        }
+
+        .metric-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            border: 1px solid var(--border-primary);
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .metric-card.highlight {
+            border-color: var(--accent-indigo);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.1);
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.6rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .metric-unit {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .metric-value.good {
+            color: var(--accent-emerald);
+        }
+
+        .metric-value.warn {
+            color: var(--accent-orange);
+        }
+
+        .metric-value.bad {
+            color: var(--accent-rose);
+        }
+
+        .metric-value.info {
+            color: var(--accent-cyan);
+        }
+
+        /* Chunk Log */
+        .chunk-log-wrapper {
+            margin-top: 20px;
+        }
+
+        .chunk-log {
+            background: #0d0d14;
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            max-height: 280px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            line-height: 1.8;
+        }
+
+        .chunk-log::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chunk-log::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chunk-log::-webkit-scrollbar-thumb {
+            background: var(--border-primary);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            padding: 4px 16px;
+            border-bottom: 1px solid rgba(42, 42, 58, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: logFadeIn 0.3s ease;
+        }
+
+        .log-entry:nth-child(even) {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        @keyframes logFadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            min-width: 72px;
+        }
+
+        .log-type {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 72px;
+            text-align: center;
+        }
+
+        .log-type.chunk {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--accent-indigo);
+        }
+
+        .log-type.info {
+            background: rgba(34, 211, 238, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .log-type.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-emerald);
+        }
+
+        .log-type.error {
+            background: rgba(244, 63, 94, 0.15);
+            color: var(--accent-rose);
+        }
+
+        .log-type.warn {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent-orange);
+        }
+
+        .log-msg {
+            color: var(--text-secondary);
+            flex: 1;
+        }
+
+        .log-msg span {
+            color: var(--text-primary);
+        }
+
+        /* Status Indicator */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            margin-bottom: 20px;
+            border: 1px solid var(--border-primary);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s;
+        }
+
+        .status-dot.idle {
+            background: var(--text-muted);
+        }
+
+        .status-dot.connecting {
+            background: var(--accent-orange);
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        .status-dot.streaming {
+            background: var(--accent-emerald);
+            animation: pulse 0.8s ease-in-out infinite;
+        }
+
+        .status-dot.done {
+            background: var(--accent-indigo);
+        }
+
+        .status-dot.error {
+            background: var(--accent-rose);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 currentColor;
+            }
+
+            50% {
+                opacity: 0.7;
+                box-shadow: 0 0 0 6px transparent;
+            }
+        }
+
+        .status-text {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        /* Waveform */
+        .waveform-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 4px;
+            margin-top: 16px;
+            height: 80px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #waveformCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .comparison-table th {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            padding: 10px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-primary);
+        }
+
+        .comparison-table td {
+            padding: 10px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            border-bottom: 1px solid rgba(42, 42, 58, 0.3);
+        }
+
+        .winner {
+            background: rgba(16, 185, 129, 0.08);
+            color: var(--accent-emerald);
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .header h1 {
+                font-size: 1.6rem;
+            }
+
+            .btn-row {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="badge">Performance Lab</div>
+            <h1>⚡ Edge TTS Streaming Benchmark</h1>
+            <p>Test TTS audio latency using MediaSource Extensions (MSE) + ReadableStream vs. direct &lt;audio&gt;
+                streaming</p>
+        </header>
+
+        <!-- Input Card -->
+        <div class="card" id="inputCard">
+            <div class="card-header">
+                <div class="card-icon indigo">📝</div>
+                <div>
+                    <div class="card-title">Configuration</div>
+                    <div class="card-subtitle">Set text, voice, and test parameters</div>
+                </div>
+            </div>
+            <div class="controls-grid">
+                <div class="control-group full-width">
+                    <label for="ttsText">Text Input</label>
+                    <textarea id="ttsText" rows="5"
+                        placeholder="Enter text to synthesize...">Tính đến ngày 16/03/2026, trên địa bàn thành phố Hà Nội có 53 nhiệm vụ đến hạn hoàn thành trước ngày 31/03/2026. Đây là nhóm nhiệm vụ được xác định là có nguy cơ chậm tiến độ hoặc chuyển sang trạng thái quá hạn nếu không được hoàn thành đúng thời hạn quy định. Mặc dù số lượng nhiệm vụ quá hạn hiện tại không lớn (12 nhiệm vụ), nhưng các nhiệm vụ có nguy cơ chậm tiến độ lại tập trung chủ yếu vào các nhóm công việc có tính chất nền tảng và then chốt như: Xây dựng cơ sở dữ liệu dùng chung và hạ tầng số. Các đề án chuyên đề về khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số. Hoàn thiện cơ chế, chính sách và kiện toàn tổ chức bộ máy. Sở Khoa học và Công nghệ hiện là đơn vị chịu áp lực lớn nhất, tập trung phần lớn các nhiệm vụ có nguy cơ chậm, muộn do khối lượng công việc nhiều và có tính liên ngành cao. Các cơ quan, đơn vị đang được yêu cầu khắc phục triệt để tình trạng này, đảm bảo mọi nhiệm vụ phải có mốc thời gian và sản phẩm đầu ra cụ thể để tránh ảnh hưởng dây chuyền đến tiến độ chung của Quý II năm 2026</textarea>
+                </div>
+                <div class="control-group">
+                    <label for="voiceSelect">Voice</label>
+                    <select id="voiceSelect">
+                        <option value="vi-VN-HoaiMyNeural">🇻🇳 vi-VN-HoaiMyNeural (Female)</option>
+                        <option value="vi-VN-NamMinhNeural">🇻🇳 vi-VN-NamMinhNeural (Male)</option>
+                        <option value="en-US-AriaNeural">🇺🇸 en-US-AriaNeural (Female)</option>
+                        <option value="en-US-GuyNeural">🇺🇸 en-US-GuyNeural (Male)</option>
+                        <option value="ja-JP-NanamiNeural">🇯🇵 ja-JP-NanamiNeural (Female)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="rateSelect">Speed Rate</label>
+                    <select id="rateSelect">
+                        <option value="-50%">🐢 -50%</option>
+                        <option value="-25%">-25%</option>
+                        <option value="+0%" selected>Normal</option>
+                        <option value="+25%">+25%</option>
+                        <option value="+50%">🐇 +50%</option>
+                        <option value="+100%">🚀 +100%</option>
+                    </select>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btnStreamA" onclick="runTestA()">
+                    ▶ Test A: &lt;audio&gt; Streaming
+                </button>
+                <button class="btn btn-secondary" id="btnStreamB" onclick="runTestB()">
+                    ⚡ Test B: ReadableStream + WebAudio
+                </button>
+                <button class="btn btn-stop" id="btnStop" onclick="stopAll()" style="display:none;">
+                    ■ Stop
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar" id="statusBar">
+            <div class="status-dot idle" id="statusDot"></div>
+            <span class="status-text" id="statusText">Idle — Ready to test</span>
+        </div>
+
+        <!-- Waveform Visualization -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon cyan">🎵</div>
+                <div>
+                    <div class="card-title">Live Audio Waveform</div>
+                    <div class="card-subtitle">Real-time visualization of decoded audio</div>
+                </div>
+            </div>
+            <div class="waveform-container">
+                <canvas id="waveformCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Metrics Dashboard -->
+        <div class="card" id="metricsCard">
+            <div class="card-header">
+                <div class="card-icon emerald">📊</div>
+                <div>
+                    <div class="card-title">Performance Metrics</div>
+                    <div class="card-subtitle">Real-time latency and throughput measurements</div>
+                </div>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-card highlight">
+                    <div class="metric-label">TTFB</div>
+                    <div class="metric-value info" id="metricTTFB">—</div>
+                    <div class="metric-unit">Time to First Byte</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">First Audio</div>
+                    <div class="metric-value info" id="metricFirstAudio">—</div>
+                    <div class="metric-unit">Time to First Sound</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Chunks</div>
+                    <div class="metric-value info" id="metricChunks">0</div>
+                    <div class="metric-unit">Received / Played</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Size</div>
+                    <div class="metric-value info" id="metricSize">0</div>
+                    <div class="metric-unit">Bytes received</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Avg Chunk</div>
+                    <div class="metric-value info" id="metricAvgChunk">—</div>
+                    <div class="metric-unit">Average chunk size</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Time</div>
+                    <div class="metric-value info" id="metricTotal">—</div>
+                    <div class="metric-unit">Request to completion</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Throughput</div>
+                    <div class="metric-value info" id="metricThroughput">—</div>
+                    <div class="metric-unit">KB/s effective</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Method</div>
+                    <div class="metric-value info" id="metricMethod">—</div>
+                    <div class="metric-unit">Current test type</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparison Results -->
+        <div class="card" id="comparisonCard" style="display:none;">
+            <div class="card-header">
+                <div class="card-icon orange">⚖️</div>
+                <div>
+                    <div class="card-title">Comparison Results</div>
+                    <div class="card-subtitle">Side-by-side performance comparison</div>
+                </div>
+            </div>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Test A: &lt;audio&gt;</th>
+                        <th>Test B: ReadableStream</th>
+                        <th>Winner</th>
+                    </tr>
+                </thead>
+                <tbody id="comparisonBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Chunk Log -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon indigo">📋</div>
+                <div>
+                    <div class="card-title">Event Log</div>
+                    <div class="card-subtitle">Detailed chunk-by-chunk timeline</div>
+                </div>
+            </div>
+            <div class="chunk-log-wrapper">
+                <div class="chunk-log" id="chunkLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== STATE =====
+        let currentAbortController = null;
+        let currentAudioEl = null;
+        let audioCtx = null;
+        let analyser = null;
+        let animFrameId = null;
+        let resultsA = null;
+        let resultsB = null;
+
+        // ===== UTILITIES =====
+        function formatMs(ms) {
+            if (ms === null || ms === undefined) return '—';
+            if (ms < 1000) return ms.toFixed(0) + 'ms';
+            return (ms / 1000).toFixed(2) + 's';
+        }
+        function formatBytes(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+            return (b / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function setStatus(state, text) {
+            const dot = document.getElementById('statusDot');
+            const txt = document.getElementById('statusText');
+            dot.className = 'status-dot ' + state;
+            txt.textContent = text;
+        }
+
+        function log(type, msg) {
+            const el = document.getElementById('chunkLog');
+            const now = performance.now();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `
+        <span class="log-time">${(now / 1000).toFixed(3)}s</span>
+        <span class="log-type ${type}">${type}</span>
+        <span class="log-msg">${msg}</span>
+      `;
+            el.appendChild(entry);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('chunkLog').innerHTML = '';
+        }
+
+        function resetMetrics() {
+            ['metricTTFB', 'metricFirstAudio', 'metricTotal', 'metricAvgChunk', 'metricThroughput', 'metricMethod'].forEach(id => {
+                document.getElementById(id).textContent = '—';
+            });
+            document.getElementById('metricChunks').textContent = '0';
+            document.getElementById('metricSize').textContent = '0';
+        }
+
+        function updateMetric(id, value, cssClass) {
+            const el = document.getElementById(id);
+            el.textContent = value;
+            if (cssClass) {
+                el.className = 'metric-value ' + cssClass;
+            }
+        }
+
+        function getParams() {
+            const text = document.getElementById('ttsText').value.trim();
+            const voice = document.getElementById('voiceSelect').value;
+            const rate = document.getElementById('rateSelect').value;
+            return { text, voice, rate };
+        }
+
+        function buildUrl(params) {
+            return `/api/tts?text=${encodeURIComponent(params.text)}&voice=${encodeURIComponent(params.voice)}&rate=${encodeURIComponent(params.rate)}`;
+        }
+
+        function setButtonsRunning(isRunning) {
+            document.getElementById('btnStreamA').disabled = isRunning;
+            document.getElementById('btnStreamB').disabled = isRunning;
+            document.getElementById('btnStop').style.display = isRunning ? 'inline-flex' : 'none';
+        }
+
+        // ===== WAVEFORM VISUALIZER =====
+        function initWaveform(sourceNode) {
+            const canvas = document.getElementById('waveformCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = canvas.offsetHeight * 2;
+            ctx.scale(2, 2);
+
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 2048;
+
+            if (sourceNode) {
+                sourceNode.connect(analyser);
+            }
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+
+            function draw() {
+                animFrameId = requestAnimationFrame(draw);
+                analyser.getByteTimeDomainData(dataArray);
+
+                ctx.fillStyle = 'rgba(13, 13, 20, 0.3)';
+                ctx.fillRect(0, 0, w, h);
+
+                // Gradient line
+                const gradient = ctx.createLinearGradient(0, 0, w, 0);
+                gradient.addColorStop(0, '#6366f1');
+                gradient.addColorStop(0.5, '#22d3ee');
+                gradient.addColorStop(1, '#a855f7');
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+
+                const sliceWidth = w / bufferLength;
+                let x = 0;
+                for (let i = 0; i < bufferLength; i++) {
+                    const v = dataArray[i] / 128.0;
+                    const y = v * h / 2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += sliceWidth;
+                }
+                ctx.lineTo(w, h / 2);
+                ctx.stroke();
+            }
+            draw();
+        }
+
+        function stopWaveform() {
+            if (animFrameId) {
+                cancelAnimationFrame(animFrameId);
+                animFrameId = null;
+            }
+        }
+
+        // ===== TEST A: <audio> ELEMENT STREAMING =====
+        async function runTestA() {
+            const params = getParams();
+            if (!params.text) { alert('Please enter text'); return; }
+
+            stopAll();
+            clearLog();
+            resetMetrics();
+            setButtonsRunning(true);
+            updateMetric('metricMethod', 'A', 'info');
+            setStatus('connecting', 'Test A: Connecting to TTS stream...');
+            log('info', 'Starting <b>Test A</b>: Direct &lt;audio&gt; element streaming');
+
+            const url = buildUrl(params);
+            const startTime = performance.now();
+            let ttfb = null;
+            let firstAudioTime = null;
+            let totalBytes = 0;
+            let chunkCount = 0;
+
+            // Create abort controller to track the stream separately
+            currentAbortController = new AbortController();
+
+            // Simultaneously fetch with ReadableStream to measure chunks
+            const fetchPromise = fetch(url, { signal: currentAbortController.signal });
+
+            // Create audio element that plays the same URL
+            const audioEl = new Audio();
+            currentAudioEl = audioEl;
+
+            audioEl.addEventListener('loadstart', () => {
+                log('info', 'Audio element: <b>loadstart</b> fired');
+            });
+            audioEl.addEventListener('canplay', () => {
+                if (!firstAudioTime) {
+                    firstAudioTime = performance.now() - startTime;
+                    updateMetric('metricFirstAudio', formatMs(firstAudioTime), firstAudioTime < 500 ? 'good' : firstAudioTime < 1500 ? 'warn' : 'bad');
+                    log('success', `First audio ready at <span>${formatMs(firstAudioTime)}</span>`);
+                }
+            });
+            audioEl.addEventListener('playing', () => {
+                setStatus('streaming', 'Test A: Playing audio...');
+                log('success', 'Audio playback <b>started</b>');
+
+                // Connect to analyser for waveform
+                try {
+                    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = audioCtx.createMediaElementSource(audioEl);
+                    source.connect(audioCtx.destination);
+                    initWaveform(source);
+                } catch (e) { /* may fail if source already connected */ }
+            });
+            audioEl.addEventListener('ended', () => {
+                const total = performance.now() - startTime;
+                updateMetric('metricTotal', formatMs(total), 'good');
+                setStatus('done', 'Test A: Completed');
+                log('success', `Playback <b>ended</b>. Total wall time: <span>${formatMs(total)}</span>`);
+                setButtonsRunning(false);
+                stopWaveform();
+                resultsA = { ttfb, firstAudioTime, totalBytes, chunkCount, totalTime: total };
+                showComparison();
+            });
+            audioEl.addEventListener('error', (e) => {
+                setStatus('error', 'Test A: Error — ' + (audioEl.error?.message || 'unknown'));
+                log('error', 'Audio element error: ' + (audioEl.error?.message || 'unknown'));
+                setButtonsRunning(false);
+            });
+
+            audioEl.src = url;
+            audioEl.play().catch(e => log('warn', 'Autoplay blocked: ' + e.message));
+
+            // Track chunks via fetch ReadableStream in parallel (for metrics only)
+            try {
+                const response = await fetchPromise;
+                ttfb = performance.now() - startTime;
+                updateMetric('metricTTFB', formatMs(ttfb), ttfb < 300 ? 'good' : ttfb < 800 ? 'warn' : 'bad');
+                log('info', `TTFB (fetch response headers): <span>${formatMs(ttfb)}</span>`);
+
+                const reader = response.body.getReader();
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunkCount++;
+                    totalBytes += value.byteLength;
+                    updateMetric('metricChunks', `${chunkCount}`, 'info');
+                    updateMetric('metricSize', formatBytes(totalBytes), 'info');
+                    if (chunkCount <= 5 || chunkCount % 10 === 0) {
+                        log('chunk', `Chunk #${chunkCount}: <span>${formatBytes(value.byteLength)}</span> (total: ${formatBytes(totalBytes)})`);
+                    }
+                    const elapsed = performance.now() - startTime;
+                    const avgChunk = totalBytes / chunkCount;
+                    updateMetric('metricAvgChunk', formatBytes(avgChunk), 'info');
+                    updateMetric('metricThroughput', (totalBytes / 1024 / (elapsed / 1000)).toFixed(1) + ' KB/s', 'info');
+                }
+                log('info', `Stream complete: <span>${chunkCount}</span> chunks, <span>${formatBytes(totalBytes)}</span>`);
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    log('error', 'Fetch error: ' + e.message);
+                }
+            }
+        }
+
+        // ===== TEST B: ReadableStream + Web Audio API =====
+        async function runTestB() {
+            const params = getParams();
+            if (!params.text) { alert('Please enter text'); return; }
+
+            stopAll();
+            clearLog();
+            resetMetrics();
+            setButtonsRunning(true);
+            updateMetric('metricMethod', 'B', 'info');
+            setStatus('connecting', 'Test B: Connecting to TTS stream...');
+            log('info', 'Starting <b>Test B</b>: fetch() + ReadableStream + Web Audio API decode');
+
+            const url = buildUrl(params);
+            const startTime = performance.now();
+            let ttfb = null;
+            let firstAudioTime = null;
+            let totalBytes = 0;
+            let chunkCount = 0;
+            let audioBufferQueue = [];
+            let isPlaying = false;
+            let streamDone = false;
+            let playbackStartTime = 0;
+
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
+            currentAbortController = new AbortController();
+
+            // Accumulated MP3 buffer — we decode incrementally
+            let accumulatedBytes = new Uint8Array(0);
+            let lastDecodedLength = 0;
+            let nextPlayAt = audioCtx.currentTime;
+            let sourceNodes = [];
+
+            // Create offline analyser
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 2048;
+            analyser.connect(audioCtx.destination);
+            initWaveform(null); // start visualizer with no source yet
+
+            async function tryDecodeAndPlay() {
+                if (accumulatedBytes.length <= lastDecodedLength) return;
+                // Try to decode the entire accumulated buffer from the start.
+                // MP3 is resilient: decodeAudioData handles incomplete frames by ignoring trailing partial data.
+                try {
+                    const bufferCopy = accumulatedBytes.buffer.slice(0);
+                    const audioBuffer = await audioCtx.decodeAudioData(bufferCopy);
+
+                    if (!firstAudioTime && audioBuffer.duration > 0) {
+                        firstAudioTime = performance.now() - startTime;
+                        updateMetric('metricFirstAudio', formatMs(firstAudioTime), firstAudioTime < 500 ? 'good' : firstAudioTime < 1500 ? 'warn' : 'bad');
+                        log('success', `First audio decoded at <span>${formatMs(firstAudioTime)}</span> (${audioBuffer.duration.toFixed(2)}s duration)`);
+                        setStatus('streaming', 'Test B: Decoding and playing...');
+                    }
+
+                    // Only play the NEW portion of audio that hasn't been scheduled yet
+                    const newDuration = audioBuffer.duration;
+                    // We re-decode the full buffer each time — calculate overlap
+                    // Compare with what we've already scheduled
+                    lastDecodedLength = accumulatedBytes.length;
+
+                    // Stop previous source nodes and schedule fresh
+                    sourceNodes.forEach(n => { try { n.stop(); } catch (e) { } });
+                    sourceNodes = [];
+
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(analyser);
+                    source.start(0);
+                    sourceNodes.push(source);
+
+                    source.onended = () => {
+                        if (streamDone) {
+                            const total = performance.now() - startTime;
+                            updateMetric('metricTotal', formatMs(total), 'good');
+                            setStatus('done', 'Test B: Completed');
+                            log('success', `Playback <b>ended</b>. Total wall time: <span>${formatMs(total)}</span>`);
+                            setButtonsRunning(false);
+                            stopWaveform();
+                            resultsB = { ttfb, firstAudioTime, totalBytes, chunkCount, totalTime: total };
+                            showComparison();
+                        }
+                    };
+                } catch (e) {
+                    // decodeAudioData may fail on partial data — that's OK, we'll retry with more data
+                    if (accumulatedBytes.length > 4096) {
+                        // Only log if we have substantial data and still failing
+                        log('warn', `Decode attempt failed (${formatBytes(accumulatedBytes.length)} buffered): ${e.message}`);
+                    }
+                }
+            }
+
+            try {
+                const response = await fetch(url, { signal: currentAbortController.signal });
+                ttfb = performance.now() - startTime;
+                updateMetric('metricTTFB', formatMs(ttfb), ttfb < 300 ? 'good' : ttfb < 800 ? 'warn' : 'bad');
+                log('info', `TTFB: <span>${formatMs(ttfb)}</span>`);
+
+                const reader = response.body.getReader();
+
+                // Decode throttle - try decode every N chunks or on significant accumulation
+                let lastDecodeAttempt = 0;
+                const DECODE_INTERVAL_MS = 300;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        streamDone = true;
+                        log('info', `Stream complete: <span>${chunkCount}</span> chunks, <span>${formatBytes(totalBytes)}</span>`);
+                        // Final decode
+                        await tryDecodeAndPlay();
+                        break;
+                    }
+
+                    chunkCount++;
+                    totalBytes += value.byteLength;
+
+                    // Append to accumulated buffer
+                    const newBuf = new Uint8Array(accumulatedBytes.length + value.byteLength);
+                    newBuf.set(accumulatedBytes);
+                    newBuf.set(value, accumulatedBytes.length);
+                    accumulatedBytes = newBuf;
+
+                    updateMetric('metricChunks', `${chunkCount}`, 'info');
+                    updateMetric('metricSize', formatBytes(totalBytes), 'info');
+                    if (chunkCount <= 5 || chunkCount % 10 === 0) {
+                        log('chunk', `Chunk #${chunkCount}: <span>${formatBytes(value.byteLength)}</span> (total: ${formatBytes(totalBytes)})`);
+                    }
+                    const elapsed = performance.now() - startTime;
+                    const avgChunk = totalBytes / chunkCount;
+                    updateMetric('metricAvgChunk', formatBytes(avgChunk), 'info');
+                    updateMetric('metricThroughput', (totalBytes / 1024 / (elapsed / 1000)).toFixed(1) + ' KB/s', 'info');
+
+                    // Attempt decode at intervals
+                    const now = performance.now();
+                    if (now - lastDecodeAttempt > DECODE_INTERVAL_MS) {
+                        lastDecodeAttempt = now;
+                        tryDecodeAndPlay(); // fire-and-forget
+                    }
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    log('warn', 'Test B aborted');
+                } else {
+                    setStatus('error', 'Test B: Error — ' + e.message);
+                    log('error', 'Error: ' + e.message);
+                    setButtonsRunning(false);
+                }
+            }
+        }
+
+        // ===== STOP =====
+        function stopAll() {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
+            if (currentAudioEl) {
+                currentAudioEl.pause();
+                currentAudioEl.src = '';
+                currentAudioEl = null;
+            }
+            stopWaveform();
+            setButtonsRunning(false);
+            setStatus('idle', 'Idle — Stopped');
+        }
+
+        // ===== COMPARISON =====
+        function showComparison() {
+            if (!resultsA || !resultsB) return;
+            const card = document.getElementById('comparisonCard');
+            card.style.display = '';
+            const tbody = document.getElementById('comparisonBody');
+            tbody.innerHTML = '';
+
+            const metrics = [
+                { label: 'TTFB', a: resultsA.ttfb, b: resultsB.ttfb, fmt: formatMs, lower: true },
+                { label: 'Time to First Audio', a: resultsA.firstAudioTime, b: resultsB.firstAudioTime, fmt: formatMs, lower: true },
+                { label: 'Total Time', a: resultsA.totalTime, b: resultsB.totalTime, fmt: formatMs, lower: true },
+                { label: 'Chunks Received', a: resultsA.chunkCount, b: resultsB.chunkCount, fmt: v => v, lower: false },
+                { label: 'Total Size', a: resultsA.totalBytes, b: resultsB.totalBytes, fmt: formatBytes, lower: false },
+            ];
+
+            metrics.forEach(m => {
+                const aWin = m.lower ? (m.a !== null && m.a <= m.b) : (m.a !== null && m.a >= m.b);
+                const bWin = m.lower ? (m.b !== null && m.b < m.a) : (m.b !== null && m.b > m.a);
+                const winner = aWin ? 'Test A' : bWin ? 'Test B' : 'Tie';
+                const row = document.createElement('tr');
+                row.innerHTML = `
+          <td>${m.label}</td>
+          <td class="${aWin ? 'winner' : ''}">${m.a !== null ? m.fmt(m.a) : '—'}</td>
+          <td class="${bWin ? 'winner' : ''}">${m.b !== null ? m.fmt(m.b) : '—'}</td>
+          <td>${winner}</td>
+        `;
+                tbody.appendChild(row);
+            });
+
+            log('success', '📊 <b>Comparison table updated</b> — scroll up to view');
+        }
+
+        // ===== INIT =====
+        // Clear waveform canvas on load
+        const canvas = document.getElementById('waveformCanvas');
+        const ctx2d = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth * 2;
+        canvas.height = canvas.offsetHeight * 2;
+        ctx2d.scale(2, 2);
+        ctx2d.fillStyle = '#0d0d14';
+        ctx2d.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+        // Draw flat line
+        const cw = canvas.offsetWidth, ch = canvas.offsetHeight;
+        const grad = ctx2d.createLinearGradient(0, 0, cw, 0);
+        grad.addColorStop(0, '#6366f1');
+        grad.addColorStop(0.5, '#22d3ee');
+        grad.addColorStop(1, '#a855f7');
+        ctx2d.strokeStyle = grad;
+        ctx2d.lineWidth = 1;
+        ctx2d.beginPath();
+        ctx2d.moveTo(0, ch / 2);
+        ctx2d.lineTo(cw, ch / 2);
+        ctx2d.stroke();
+    </script>
+</body>
+
+</html>

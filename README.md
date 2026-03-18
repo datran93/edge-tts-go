@@ -26,7 +26,7 @@ go build -o bin/edge-tts ./cmd/edge-tts
 
 ## Command Line Usage
 
-The CLI arguments match the original `edge-tts` tool closely. 
+The CLI arguments match the original `edge-tts` tool closely.
 
 ### Basic Usage
 Convert a string of text to an mp3 file and corresponding subtitle file:
@@ -56,7 +56,7 @@ You can change the voice used by the text-to-speech service by using the `--voic
 ```
 
 ### Adjusting Rate, Volume, and Pitch
-You can change the rate, volume, and pitch of the generated speech. 
+You can change the rate, volume, and pitch of the generated speech.
 
 ```bash
 ./bin/edge-tts --rate="-50%" --text "Speaking slowly." --write-media slow.mp3
@@ -80,7 +80,7 @@ If you are passing a large markdown document and want a smooth, uninterrupted re
 
 ## Using as a Go Module
 
-You can easily embed `edge-tts-go` into your own Go applications. 
+You can easily embed `edge-tts-go` into your own Go applications.
 
 ```go
 package main
@@ -94,7 +94,7 @@ import (
 
 func main() {
 	text := "Hello from Go!"
-	
+
 	// Set configuration
 	config := edge_tts.TTSConfig{
 		Voice:  "en-US-AriaNeural",
@@ -111,7 +111,7 @@ func main() {
 
 	// Stream handles audio data strings and metadata back to you
 	chunksChan, errChan := comm.Stream()
-	
+
 	subMaker := edge_tts.NewSubMaker()
 
 	for {
@@ -127,7 +127,7 @@ func main() {
 				chunksChan = nil
 				goto DONE
 			}
-			
+
 			if chunk.Type == "audio" {
 				// Process or write mp3 bytes -> chunk.Data
 				fmt.Printf("Received %d bytes of audio\n", len(chunk.Data))
@@ -144,5 +144,69 @@ DONE:
 }
 ```
 
+## TTS Test Server (Frontend Streaming Benchmark)
+
+A built-in web UI for benchmarking TTS audio streaming performance in the browser. It compares two streaming strategies side-by-side with real-time metrics.
+
+### Build & Run
+
+```bash
+# Build the test server
+go build -o bin/tts-test-server ./cmd/tts-test-server
+
+# Run on default port 8080
+./bin/tts-test-server
+
+# Or specify a custom port
+./bin/tts-test-server -port 3000
+```
+
+Then open **http://localhost:8080** in your browser.
+
+### Benchmark Tests
+
+The UI provides two streaming test modes:
+
+| Test | Method | Description |
+|------|--------|-------------|
+| **Test A** | `<audio>` element | Browser-native streaming. Audio element plays directly from the chunked HTTP response. A parallel `fetch()` + `ReadableStream` tracks chunk metrics. |
+| **Test B** | `fetch()` + Web Audio API | Manual streaming. Reads chunks via `ReadableStream`, accumulates MP3 bytes, incrementally decodes with `decodeAudioData()`, and schedules playback via `AudioBufferSourceNode`. |
+
+### Metrics Measured
+
+- **TTFB** — Time to First Byte (HTTP response headers received)
+- **Time to First Audio** — When audio is first playable/decoded
+- **Chunks** — Number of chunked transfer segments received
+- **Total Size** — Total bytes streamed
+- **Avg Chunk Size** — Average bytes per chunk
+- **Throughput** — Effective KB/s transfer rate
+- **Total Time** — Wall clock time from request to completion
+
+After running both tests, a **comparison table** highlights the winner for each metric.
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `GET /api/tts` | GET | Streams TTS audio as chunked `audio/mpeg` |
+| `GET /api/voices` | GET | Lists all available voices as JSON |
+
+**`/api/tts` query parameters:**
+
+| Param | Default | Example |
+|-------|---------|---------|
+| `text` | *(required)* | `Hello world` |
+| `voice` | `en-US-AriaNeural` | `vi-VN-HoaiMyNeural` |
+| `rate` | `+0%` | `-50%`, `+100%` |
+
+**Example:**
+```bash
+# Stream audio directly with curl
+curl "http://localhost:8080/api/tts?text=Hello+world&voice=en-US-AriaNeural&rate=+0%" -o output.mp3
+
+# List available voices
+curl "http://localhost:8080/api/voices" | jq .
+```
+
 ## Disclaimer
-This project is an unofficial port of the Python `edge-tts` and relies on the Microsoft Edge Read Aloud API. Microsoft may change the API or the DRM token protocols at any point which may impact functionality. 
+This project is an unofficial port of the Python `edge-tts` and relies on the Microsoft Edge Read Aloud API. Microsoft may change the API or the DRM token protocols at any point which may impact functionality.
